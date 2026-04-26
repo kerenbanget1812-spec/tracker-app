@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>SafeTrack - Lacak Keluarga & Pasangan</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Container */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            min-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        /* Navigasi Tab */
+        .tab-bar {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+            border: none;
+            background: none;
+            font-size: 16px;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .tab:not(.active) {
+            color: #888;
+        }
+
+        /* Konten Halaman */
+        .page {
+            display: none;
+            padding: 20px;
+            flex: 1;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* Form Styling */
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+
+        input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn-stop {
+            background: #dc3545;
+            margin-top: 10px;
+        }
+
+        .btn-stop:hover {
+            background: #c82333;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #1565c0;
+        }
+
+        .status-box {
+            background: #d4edda;
+            padding: 12px;
+            border-radius: 12px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .status-box.show {
+            display: block;
+        }
+
+        /* Peta */
+        #map {
+            height: 400px;
+            border-radius: 16px;
+            margin-bottom: 15px;
+            z-index: 1;
+        }
+
+        .track-info {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 12px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge-online {
+            background: #4caf50;
+            color: white;
+        }
+
+        .badge-offline {
+            background: #f44336;
+            color: white;
+        }
+
+        .badge-warning {
+            background: #ff9800;
+            color: white;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            font-size: 11px;
+            color: #999;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span>💑</span> SafeTrack
+                <span>📍</span>
+            </h1>
+            <p>Lacak lokasi keluarga & pasangan dengan izin</p>
+        </div>
+
+        <!-- TAB NAVIGASI -->
+        <div class="tab-bar">
+            <button class="tab active" onclick="switchPage('share')">📡 SHARE LOKASI</button>
+            <button class="tab" onclick="switchPage('track')">🔍 LACAK LOKASI</button>
+        </div>
+
+        <!-- HALAMAN 1: SHARE LOKASI (isi nama, kode, mulai sharing) -->
+        <div id="sharePage" class="page active">
+            <div class="input-group">
+                <label>👤 Nama Kamu</label>
+                <input type="text" id="namaUser" placeholder="Contoh: Citra">
+            </div>
+            <div class="input-group">
+                <label>❤️ Nama Pasangan</label>
+                <input type="text" id="namaPacar" placeholder="Contoh: Bima">
+            </div>
+            <div class="input-group">
+                <label>🔑 Kode Ruangan (buat sendiri, kasih ke pasangan)</label>
+                <input type="text" id="roomCode" placeholder="Contoh: BIMA0210">
+            </div>
+
+            <button id="startBtn" onclick="startSharing()">📍 MULAI BERBAGI LOKASI</button>
+            <button id="stopBtn" class="btn-stop" onclick="stopSharing()" style="display:none;">🛑 STOP BERBAGI LOKASI</button>
+
+            <div id="shareStatus" class="status-box"></div>
+            <div class="info-box">
+                ⚠️ IZINKAN akses lokasi saat popup muncul.<br>
+                ✅ Setelah izin, lokasi akan dikirim setiap 15 detik.<br>
+                🔋 Bisa jalan di background (layar mati).
+            </div>
+        </div>
+
+        <!-- HALAMAN 2: LACAK LOKASI (peta + realtime) -->
+        <div id="trackPage" class="page">
+            <div class="input-group">
+                <label>🔑 Masukkan Kode Ruangan Pasangan</label>
+                <input type="text" id="trackRoomCode" placeholder="Masukkan kode dari pasangan">
+            </div>
+            <button onclick="startTracking()">🔍 MULAI LACAK</button>
+
+            <div id="map" style="height: 350px; margin-top: 15px;"></div>
+            
+            <div class="track-info" id="trackInfo">
+                <span id="trackName">—</span><br>
+                <span id="trackStatus">Belum ada data</span><br>
+                <span id="trackTime">—</span>
+            </div>
+
+            <div class="info-box">
+                📍 Posisi terbaru akan muncul otomatis setelah pasangan mulai sharing.
+            </div>
+        </div>
+
+        <div class="footer">
+            ⚠️ Hanya untuk digunakan dengan izin pasangan/keluarga
+        </div>
+    </div>
+
+    <script>
+        // ========== FIREBASE CONFIG (GANTI DENGAN PUNYA LO) ==========
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2Vbrh_AwWDq2eEwPSKtV_p-Dh6oVJbKw",
+            authDomain: "safetrack-d3b85.firebaseapp.com",
+            databaseURL: "https://safetrack-d3b85-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "safetrack-d3b85",
+            storageBucket: "safetrack-d3b85.firebasestorage.app",
+            messagingSenderId: "510921235146",
+            appId: "1:510921235146:web:bf218e8644e567a4fbb233"
+        };
+        // ==============================================================
+
+        // Inisialisasi Firebase
+        let db;
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            db = firebase.database();
+            console.log("✅ Firebase connected");
+        } catch(e) {
+            console.error("Firebase error:", e);
+            alert("❌ Firebase error: " + e.message);
+        }
+
+        // Variabel global
+        let shareInterval = null;
+        let shareWatchId = null;
+        let isSharingActive = false;
+        let currentRoomCode = "";
+        let currentNamaUser = "";
+        let currentNamaPacar = "";
+
+        let trackMap = null;
+        let trackMarker = null;
+        let trackListener = null;
+
+        // ========== FUNGSI PINDAH HALAMAN ==========
+        function switchPage(page) {
+            // Hide semua page
+            document.getElementById('sharePage').classList.remove('active');
+            document.getElementById('trackPage').classList.remove('active');
+            
+            // Update tab style
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            if (page === 'share') {
+                document.getElementById('sharePage').classList.add('active');
+                tabs[0].classList.add('active');
+                // Resize map kalo perlu (ga ada di halaman ini)
+            } else {
+                document.getElementById('trackPage').classList.add('active');
+                tabs[1].classList.add('active');
+                // Inisialisasi peta kalo belum
+                if (!trackMap) {
+                    initTrackMap();
+                } else {
+                    setTimeout(() => trackMap.invalidateSize(), 200);
+                }
+            }
+        }
+
+        // ========== HALAMAN 1: SHARE LOKASI ==========
+        function startSharing() {
+            const namaUser = document.getElementById('namaUser').value.trim();
+            const namaPacar = document.getElementById('namaPacar').value.trim();
+            const roomCode = document.getElementById('roomCode').value.trim();
+            const statusDiv = document.getElementById('shareStatus');
+
+            if (!namaUser || !namaPacar || !roomCode) {
+                statusDiv.className = 'status-box show';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = '❌ Semua harus diisi, BANGSAT!';
+                return;
+            }
+
+            if (!db) {
+                statusDiv.className = 'status-box show';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = '❌ Firebase error. Cek koneksi internet!';
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                statusDiv.className = 'status-box show';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = '❌ Browser tidak support GPS!';
+                return;
+            }
+
+            currentRoomCode = roomCode;
+            currentNamaUser = namaUser;
+            currentNamaPacar = namaPacar;
+
+            statusDiv.className = 'status-box show';
+            statusDiv.style.background = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.innerHTML = '📍 Meminta izin lokasi... Pastikan muncul popup dan klik IZINKAN.';
+
+            // Request izin lokasi
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.innerHTML = '✅ Izin diberikan! Mulai mengirim lokasi...';
+                    startSendingLocation();
+                },
+                (error) => {
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    let errorMsg = "❌ Gagal mendapat izin lokasi. ";
+                    if (error.code === 1) {
+                        errorMsg += "Klik IZINKAN di popup!";
+                    } else if (error.code === 2) {
+                        errorMsg += "Nyalakan GPS/lokasi di HP!";
+                    } else {
+                        errorMsg += error.message;
+                    }
+                    statusDiv.innerHTML = errorMsg;
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+
+        function sendLocationOnce() {
+            if (!db || !currentRoomCode) return;
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const data = {
+                        nama: currentNamaUser,
+                        pasangan: currentNamaPacar,
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        waktu: new Date().toISOString(),
+                        timestamp: Date.now(),
+                        status: "aktif"
+                    };
+                    db.ref('locations/' + currentRoomCode).set(data);
+                    
+                    const statusDiv = document.getElementById('shareStatus');
+                    const timeStr = new Date().toLocaleTimeString();
+                    statusDiv.innerHTML = `✅ Lokasi terkirim! (${timeStr})<br>🔑 Kode: ${currentRoomCode}`;
+                },
+                (error) => {
+                    console.log("Gagal ambil lokasi:", error);
+                    if (db && currentRoomCode) {
+                        db.ref('locations/' + currentRoomCode).update({
+                            status: "error",
+                            last_error: new Date().toISOString()
+                        });
+                    }
+                }
+            );
+        }
+
+        function startSendingLocation() {
+            // Matikan yang lama kalo ada
+            if (shareInterval) clearInterval(shareInterval);
+            if (shareWatchId) navigator.geolocation.clearWatch(shareWatchId);
+
+            // Kirim pertama
+            sendLocationOnce();
+            
+            // Kirim setiap 15 detik
+            shareInterval = setInterval(sendLocationOnce, 15000);
+            
+            // Watch position untuk realtime
+            shareWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    if (db && currentRoomCode) {
+                        const data = {
+                            nama: currentNamaUser,
+                            pasangan: currentNamaPacar,
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            waktu: new Date().toISOString(),
+                            timestamp: Date.now(),
+                            status: "aktif"
+                        };
+                        db.ref('locations/' + currentRoomCode).set(data);
+                    }
+                },
+                (error) => {},
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+            );
+
+            isSharingActive = true;
+            
+            // Update tombol
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block';
+            
+            // Simpan ke localStorage
+            localStorage.setItem('isSharing', 'true');
+            localStorage.setItem('roomCode', currentRoomCode);
+            localStorage.setItem('namaUser', currentNamaUser);
+            localStorage.setItem('namaPacar', currentNamaPacar);
+        }
+
+        function stopSharing() {
+            if (shareInterval) {
+                clearInterval(shareInterval);
+                shareInterval = null;
+            }
+            if (shareWatchId) {
+                navigator.geolocation.clearWatch(shareWatchId);
+                shareWatchId = null;
+            }
+            if (db && currentRoomCode) {
+                db.ref('locations/' + currentRoomCode).update({
+                    status: "stopped",
+                    stopped_at: new Date().toISOString()
+                });
+            }
+            
+            isSharingActive = false;
+            
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            
+            const statusDiv = document.getElementById('shareStatus');
+            statusDiv.style.background = '#d4edda';
+            statusDiv.style.color = '#155724';
+            statusDiv.innerHTML = '🛑 Sharing lokasi dihentikan.';
+            
+            localStorage.removeItem('isSharing');
+        }
+
+        // Auto restore sharing kalo sebelumnya aktif
+        if (localStorage.getItem('isSharing') === 'true') {
+            const savedRoom = localStorage.getItem('roomCode');
+            const savedUser = localStorage.getItem('namaUser');
+            const savedPacar = localStorage.getItem('namaPacar');
+            if (savedRoom && savedUser && savedPacar) {
+                document.getElementById('namaUser').value = savedUser;
+                document.getElementById('namaPacar').value = savedPacar;
+                document.getElementById('roomCode').value = savedRoom;
+                setTimeout(() => startSharing(), 500);
+            }
+        }
+
+        // ========== HALAMAN 2: LACAK LOKASI (PETA) ==========
+        function initTrackMap() {
+            trackMap = L.map('map').setView([-6.2088, 106.8456], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            }).addTo(trackMap);
+        }
+
+        function startTracking() {
+            const roomCode = document.getElementById('trackRoomCode').value.trim();
+            const trackNameSpan = document.getElementById('trackName');
+            const trackStatusSpan = document.getElementById('trackStatus');
+            const trackTimeSpan = document.getElementById('trackTime');
+
+            if (!roomCode) {
+                trackStatusSpan.innerHTML = '❌ Masukkan kode ruangan!';
+                return;
+            }
+
+            if (!db) {
+                trackStatusSpan.innerHTML = '❌ Firebase error!';
+                return;
+            }
+
+            if (!trackMap) {
+                initTrackMap();
+            }
+
+            if (trackListener) {
+                trackListener.off();
+            }
+
+            trackStatusSpan.innerHTML = '🔍 Mencari lokasi...';
+            
+            const locationRef = db.ref('locations/' + roomCode);
+            
+            trackListener = locationRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                
+                if (data && data.lat && data.lng) {
+                    const lat = data.lat;
+                    const lng = data.lng;
+                    const nama = data.nama || 'Pasangan';
+                    const waktu = data.waktu ? new Date(data.waktu) : new Date();
+                    const selisihDetik = Math.floor((Date.now() - (data.timestamp || waktu.getTime())) / 1000);
+                    
+                    // Update info
+                    trackNameSpan.innerHTML = `👤 ${nama}`;
+                    trackTimeSpan.innerHTML = `🕐 Update: ${waktu.toLocaleTimeString()}`;
+                    
+                    if (selisihDetik > 120) {
+                        trackStatusSpan.innerHTML = '⚠️ Lokasi lama >2 menit!';
+                        trackStatusSpan.className = 'badge badge-warning';
+                    } else if (selisihDetik > 60) {
+                        trackStatusSpan.innerHTML = '⚠️ >1 menit yang lalu';
+                        trackStatusSpan.className = 'badge badge-warning';
+                    } else {
+                        trackStatusSpan.innerHTML = '✅ LIVE sekarang';
+                        trackStatusSpan.className = 'badge badge-online';
+                    }
+                    
+                    // Update peta
+                    if (trackMarker) {
+                        trackMarker.setLatLng([lat, lng]);
+                    } else {
+                        trackMarker = L.marker([lat, lng]).addTo(trackMap);
+                    }
+                    
+                    trackMarker.bindPopup(`
+                        <b>${nama}</b><br>
+                        📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+                        ⏰ ${waktu.toLocaleString()}
+                    `).openPopup();
+                    
+                    trackMap.setView([lat, lng], 15);
+                    
+                } else {
+                    trackNameSpan.innerHTML = '—';
+                    trackStatusSpan.innerHTML = '⏳ Belum ada lokasi. Minta pasangan mulai sharing!';
+                    trackTimeSpan.innerHTML = '—';
+                }
+            });
+        }
+
+        // Cleanup saat halaman ditutup
+        window.onbeforeunload = function() {
+            if (isSharingActive) {
+                return "Anda sedang berbagi lokasi. Yakin ingin keluar?";
+            }
+            return null;
+        };
+    </script>
+</body>
+</html>
